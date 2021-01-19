@@ -72,7 +72,7 @@ else
 end
 % End initialization code - DO NOT EDIT
 
-% --- Executes just before TraceX is made visible.
+% --- Executes just before TraceX is made visible
 function TraceX_OpeningFcn(hObject, eventdata, hand, varargin)
 % get(hand.Xlimit,'Position')
 hand.ImagePlotPos=[.01 .09 .71 .71];%norm
