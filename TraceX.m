@@ -595,7 +595,7 @@ else  %%%%%% Profile + Data
         set(hand.Fit_End,'String',...
             roundsf(1e6*X(hand.Fit_End_idx),3,'round'));
     end
-    
+      
     [r2 rmse] = rsquare(hand.ProfileData(hand.Fit_Start_idx:hand.Fit_End_idx),...
         hand.pro(hand.Fit_Start_idx:hand.Fit_End_idx));
     hand.r2=r2;
@@ -687,7 +687,7 @@ Fit_Start_idx=hand.Fit_Start_idx;
 
 if get(hand.BoundCondMode,'Value')==2
     if str2double(get(hand.Fit_End, 'String'))>MP_m*1e6
-        set(hand.Fit_End, 'String',get(hand.MirrorPlane,'String')) 
+        set(hand.Fit_End, 'String',get(hand.MirrorPlane,'String'))
     end
 end
 
@@ -709,7 +709,7 @@ hand.Xdata=hand.Xdata_Or(1:end-hand.SurfPos_idx+1);
 hand.ProfileData=hand.ProfileData_Or(hand.SurfPos_idx:end);
 
 set(hand.FitButton,'ForegroundColor',[0.5,0.5,0.5]);
-set(hand.FitButton,'String','Fitting...');drawnow 
+set(hand.FitButton,'String','Fitting...');drawnow
 
 switch get(hand.ProfileMode,'Value')
     case 1 % Crank
@@ -761,7 +761,36 @@ switch get(hand.ProfileMode,'Value')
         end
         disp(['Total time for fit ',num2str(round(toc)),' seconds.'])
     case 4 % Interfacial
-    case 5 % 
+        
+        D1=str2double(get(hand.D1, 'String'));
+        D2=str2double(get(hand.D2, 'String'));
+        k1=str2double(get(hand.k1, 'String'));
+        r_int=str2double(get(hand.k2, 'String'));
+        tic;
+        r2 = 0;
+        tim=0;
+        i=1;
+        r2check(1)=str2double(get(hand.Rsq,'String'));
+        L_int_m=str2double(get(hand.InterfaceDepth,'String'))*1e-6;
+        
+        
+        while r2<0.999 && tim<20
+            
+            [X,pro] = CN_Interface_inline(...
+                C_gas,C_bg,D1,D2,k1,r_int,t1,L_int_m,ProLen_m,PixelNo,BC,MP_m); %ImageLength
+            [r2 rmse] = rsquare(hand.ProfileData(Fit_Start_idx:Fit_End_idx),...
+                pro(Fit_Start_idx:Fit_End_idx));
+            
+            tim=toc+tim;
+            i=i+1;
+            r2check(i)=r2;
+            if r2check(i)==r2check(i-1);
+                tim=20;
+            end
+            
+        end
+        disp(['Total time for fit ',num2str(round(toc)),' seconds.'])
+    case 5 %
         [D1,k1,A_gb,Z_gb]=AutoFit_Crank_LC(hand);
 end
 
@@ -792,23 +821,23 @@ end
 %         tim=0;
 %         i=1;
 %         r2check(1)=str2double(get(hand.Rsq,'String'));
-%         
+%
 %         while r2<0.999 && tim<20;
-%             
+%
 %             [D1,k1,D2,k2]= AutoFit_BackDiffs(C_gas,C_bg,D1,k1,D2,k2,t1,t2,hand.ProfileData,...
 %                 hand.Xdata,Fit_Start_idx,Fit_End_idx,ProLen_m,PixelNo,hand,FitCheck);
 %             [X,pro]=CN_inline(...
 %                 C_gas,C_bg,D1,D2,k1,k2,t1,t2,ProLen_m,PixelNo,BC,MP_m); %ImageLength
 %             [r2 rmse] = rsquare(hand.ProfileData(Fit_Start_idx:Fit_End_idx),...
 %                 pro(Fit_Start_idx:Fit_End_idx));
-%             
+%
 %             tim=toc+tim;
 %             i=i+1;
 %             r2check(i)=r2;
 %             if r2check(i)==r2check(i-1);
 %                 tim=20;
 %             end
-%             
+%
 %         end
 %         disp(['Total time for fit ',num2str(round(toc)),' seconds.'])
 %                 set(hand.FitButton,'Enable','on');
@@ -2453,7 +2482,7 @@ else
                 t_idx=ceil(t_i/dt);
             end
             
-            C=C1;            
+            C=C1;
             A2(end,end-2:end)=    [-sigma2 2*sigma2 1-sigma2];
             A2_new(end,end-2:end)=[sigma2 -2*sigma2 1+sigma2];
             A2_newI=A2_new\I;
@@ -2465,7 +2494,7 @@ else
             end
             pro=(C_mirror+C)./2;
         end
-    end 
+    end
 end
 
 PixelNo=PixelNo_Data;
@@ -2569,16 +2598,19 @@ for t=1:Nt
 end
 
 if C(end) < 0.001
-    pro = C;
+    pro = transpose(C);
 else
     
     for t=1:Nt
         C_Di = A_nI_Di*(A_Di*C_Di+G);
     end
-
     
-    pro = (C+C_Di)/2;
+    
+    pro = transpose((C+C_Di)/2);
+    
+    
     %pro=interp1(X_sim,pro,X,'spline');
+    
 end
 
 function [D1,k1]= AutoFit_Crank(hand)
