@@ -419,6 +419,7 @@ k2=str2double(get(hand.k2, 'String'));
 t1=3600*str2double(get(hand.t1, 'String'));
 t2=3600*str2double(get(hand.t2, 'String'));
 ProLen_m=1e-6*str2double(get(hand.ProfileLength, 'String'));
+L_int_m=str2double(get(hand.InterfaceDepth,'String'))*1e-6;
 BC=get(hand.BoundCondMode,'Value');
 switch BC
     case 1
@@ -595,7 +596,7 @@ else  %%%%%% Profile + Data
         set(hand.Fit_End,'String',...
             roundsf(1e6*X(hand.Fit_End_idx),3,'round'));
     end
-      
+    
     [r2 rmse] = rsquare(hand.ProfileData(hand.Fit_Start_idx:hand.Fit_End_idx),...
         hand.pro(hand.Fit_Start_idx:hand.Fit_End_idx));
     hand.r2=r2;
@@ -675,6 +676,7 @@ t1=3600*str2double(get(hand.t1, 'String'));
 t2=3600*str2double(get(hand.t2, 'String'));
 ProfileLength=str2double(get(hand.ProfileLength, 'String'));
 ProLen_m=ProfileLength*1e-6;
+L_int_m=str2double(get(hand.InterfaceDepth,'String'))*1e-6;
 PixelNo=str2double(get(hand.PixelNo, 'String'));
 BC=get(hand.BoundCondMode,'Value');
 MP_m=str2double(get(hand.MirrorPlane,'String'))*1e-6;
@@ -771,16 +773,19 @@ switch get(hand.ProfileMode,'Value')
         tim=0;
         i=1;
         r2check(1)=str2double(get(hand.Rsq,'String'));
-        L_int_m=str2double(get(hand.InterfaceDepth,'String'))*1e-6;
         
         
         while r2<0.999 && tim<20
             
+            [D1,k1,D2,r_int]= AutoFit_Interface(...
+                C_gas,C_bg,D1,k1,D2,r_int,t1,hand.ProfileData,...
+                Fit_Start_idx,Fit_End_idx,L_int_m,ProLen_m,...
+                PixelNo,BC,MP_m);
             [X,pro] = CN_Interface_inline(...
                 C_gas,C_bg,D1,D2,k1,r_int,t1,L_int_m,ProLen_m,PixelNo,BC,MP_m); %ImageLength
             [r2 rmse] = rsquare(hand.ProfileData(Fit_Start_idx:Fit_End_idx),...
                 pro(Fit_Start_idx:Fit_End_idx));
-            
+            k2 = r_int;
             tim=toc+tim;
             i=i+1;
             r2check(i)=r2;
@@ -851,7 +856,7 @@ k2=roundsf(k2,3,'round');
 set(hand.D1,'String',num2str(D1));
 set(hand.D2,'String',num2str(D2));
 set(hand.k1,'String',num2str(k1));
-set(hand.k2,'String',num2str(k2));
+set(hand.k2,'String',num2str(k2,'%.0e'));
 
 FitPlot(hObject, eventdata, hand);
 
@@ -1075,8 +1080,8 @@ function k2slider_Callback(hObject, eventdata, hand)
 inc=get(hand.k2slider,'Value');
 set(hand.k2slider,'Value',0);
 k2=str2double(get(hand.k2, 'String'));
-% k2=roundsf(k2*(1+inc*0.1),3,'round');
-k2=roundsf(k2+inc*10^(floor(log10(k2)-1)),3,'round');
+ k2=roundsf(k2*(1+inc*0.1),3,'round');
+%k2=roundsf(k2+inc*10^(floor(log10(k2)-1)),3,'round');
 set(hand.k2,'String',num2str(abs(k2)));
 if str2double(get(hand.PixelNo,'String'))<1000
     PlotButton_Callback(hObject, eventdata, hand);
@@ -2285,6 +2290,24 @@ else
     pro=pro(ran(1):ran(2));
 end
 
+function [pro]=Interface_AutoCaller(p,b,ran,BC)
+if min(p)<=0
+    pro=zeros(1,ran(2)-ran(1)+1);
+else
+    D1=p(1);        D2=p(2);        k1=p(3);        r_int=p(4);
+    
+    C_gas=b(1);
+    C_bg=b(2);
+    t1=b(3);
+    L_int_m=b(4);
+    ProLen_m=b(5);
+    PixelNo=b(6);
+    
+    
+    [X,pro] = CN_Interface_inline(...
+        C_gas,C_bg,D1,D2,k1,r_int,t1,L_int_m,ProLen_m,PixelNo,BC);
+    pro=pro(ran(1):ran(2));
+end
 
 function WarningBox_CreateFcn(hObject, eventdata, hand)
 
@@ -2518,8 +2541,11 @@ h1=k1/D1;
 dx=ProLen_m/(PixelNo-1);%spatial step
 X=0:dx:ProLen_m; %domain
 t=t_i; %s %initial exchange duration
-%dt=5*round(dx^2/(2*min(D1,D2)),3,'significant'); % Time step
-dt = 1;
+dt=5*round(dx^2/(2*min(D1,D2)),3,'significant'); % Time step
+if t/dt < 100
+    dt = t/100;
+end
+%dt = 1; % Use this if the calculated dt is spazzing out
 Nt=t/dt; % Number of time steps round((t_tot)/dt)
 Nx=ProLen_m/dx+1; % Define number of spatial nodes
 
@@ -2870,6 +2896,31 @@ elseif FitCheck(2)==0
 elseif FitCheck(4)==0
     D1=p(1);D2=p(2);k1=p(3);k2=p(3);
 end
+
+function [D1,k1,D2,r_int]= AutoFit_Interface(...
+    C_gas,C_bg,D1,k1,D2,r_int,t1,ProfileData,...
+    Fit_Start_idx,Fit_End_idx,L_int_m,ProLen_m,...
+    PixelNo,BC,MP_m)
+ran(1)=Fit_Start_idx;
+ran(2)=Fit_End_idx;
+
+b(1)=C_gas;
+b(2)=C_bg;
+b(3)=t1;
+b(4)=L_int_m;
+b(5)=ProLen_m;
+b(6)=PixelNo;
+
+
+fun = @(p) sum((...
+    ProfileData(ran(1):ran(2))-...
+    Interface_AutoCaller(p,b,ran,BC)).^2,'omitnan');
+pguess = [D1,D2,k1,r_int];
+
+
+[p,~] = fminsearch(fun,pguess,optimset('TolFun',1e-10));
+
+D1=p(1);D2=p(2);k1=p(3);r_int=p(4);
 
 function Align_CreateFcn(hObject, eventdata, hand)
 
