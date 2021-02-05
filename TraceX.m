@@ -1080,8 +1080,8 @@ function k2slider_Callback(hObject, eventdata, hand)
 inc=get(hand.k2slider,'Value');
 set(hand.k2slider,'Value',0);
 k2=str2double(get(hand.k2, 'String'));
- k2=roundsf(k2*(1+inc*0.1),3,'round');
-%k2=roundsf(k2+inc*10^(floor(log10(k2)-1)),3,'round');
+%k2=roundsf(k2*(1+inc*0.1),3,'round');
+k2=roundsf(k2+inc*10^(floor(log10(k2)-1)),3,'round');
 set(hand.k2,'String',num2str(abs(k2)));
 if str2double(get(hand.PixelNo,'String'))<1000
     PlotButton_Callback(hObject, eventdata, hand);
@@ -2535,8 +2535,8 @@ end
 function [X,pro]=CN_Interface_inline(C_gas,C_bg,D1,D2,k1,r_int,t1,L_int_m,ProLen_m,PixelNo,BC,MP_m)
 t_i=t1 ; %s %initial exchange duration
 h1=k1/D1;
-%PixelNo_Data=PixelNo; %Store the orinigal number of data point for interpolation at the end
-%PixelNo=300; %Perhaps run the simulation on a sensible number of points and then interpolate to the true positions afterwards
+PixelNo_Data=PixelNo; %Store the orinigal number of data point for interpolation at the end
+PixelNo=100; %Perhaps run the simulation on a sensible number of points and then interpolate to the true positions afterwards
 
 dx=ProLen_m/(PixelNo-1);%spatial step
 X=0:dx:ProLen_m; %domain
@@ -2634,8 +2634,19 @@ else
     
     pro = transpose((C+C_Di)/2);
     
+    PixelNo=PixelNo_Data;
+    dx1=dx;
+    dx=ProLen_m/(PixelNo-1); %spatial step
+    X_sim=X;
+    X=0:dx:ProLen_m; %domain
     
-    %pro=interp1(X_sim,pro,X,'spline');
+    
+    p1=interp1(X_sim(1:round(L(1)/dx1)),pro(1:round(L(1)/dx1)),X(1:round(PixelNo*((round(L(1)/dx1))/length(X_sim)))),'spline');
+    p2=interp1(X_sim(round(L(1)/dx1)+1:end),pro(round(L(1)/dx1)+1:end),X(round(PixelNo*((round(L(1)/dx1))/length(X_sim)))+1:end),'spline');
+    protot=zeros(1,length(X));
+    protot(1:round(PixelNo*((round(L(1)/dx1))/length(X_sim))))=p1;
+    protot(round(PixelNo*((round(L(1)/dx1))/length(X_sim)))+1:end)=p2;
+    pro=protot;
     
 end
 
@@ -2918,7 +2929,7 @@ fun = @(p) sum((...
 pguess = [D1,D2,k1,r_int];
 
 
-[p,~] = fminsearch(fun,pguess,optimset('TolFun',1e-10));
+[p,~] = fminsearch(fun,pguess,optimset('TolFun',1e-10,'MaxFunEvals',2000));
 
 D1=p(1);D2=p(2);k1=p(3);r_int=p(4);
 
